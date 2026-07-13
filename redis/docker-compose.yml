@@ -1,0 +1,43 @@
+services:
+  redis:
+    image: redis:8.8.0-alpine
+    container_name: redis
+    ports:
+      # 宿主机通过 localhost:6379 访问 Redis，仅监听本机以避免暴露到局域网
+      - "127.0.0.1:6379:6379"
+
+    command:
+      - redis-server
+
+      # AOF：记录每次写操作；重启时通过日志恢复数据
+      - "--appendonly"
+      - "yes"
+      # 每秒把 AOF 刷入磁盘，性能与数据安全之间较平衡
+      - "--appendfsync"
+      - "everysec"
+
+      # RDB：60 秒内至少发生 1000 次修改时生成内存快照
+      - "--save"
+      - "60"
+      - "1000"
+
+      # 本地学习密码；生产环境应通过 Secret 管理并使用更强密码
+      - "--requirepass"
+      - "redis123456"
+
+    volumes:
+      # Redis 的 AOF 和 RDB 文件都写入 /data，由 Docker 命名卷持久化
+      - redis_data:/data
+      # 如需直接观察本地文件，可删除上一行并改成：
+      # - ./data:/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=redis123456 redis-cli ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+volumes:
+  # down 时保留数据；down -v 时删除命名卷及其中的数据
+  redis_data:

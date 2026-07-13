@@ -1,0 +1,46 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: mysql84
+    ports:
+      # 宿主机通过 localhost:3306 访问 MySQL，仅监听本机以避免暴露到局域网
+      - "127.0.0.1:3306:3306"
+    environment:
+      # root 管理员密码
+      MYSQL_ROOT_PASSWORD: "root123456"
+
+      # 容器首次启动时自动创建的数据库
+      MYSQL_DATABASE: study
+
+      # 容器首次启动时自动创建的普通用户及密码
+      MYSQL_USER: study_user
+      MYSQL_PASSWORD: "study123456"
+
+      # 容器使用中国标准时间
+      TZ: Asia/Shanghai
+
+    # 这些参数等价于写在 MySQL 配置文件 [mysqld] 下
+    command:
+      # 使用 utf8mb4，可完整存储中文、Emoji 等 Unicode 字符
+      - "--character-set-server=utf8mb4"
+      # MySQL 8 默认排序规则：不区分大小写，支持多语言排序
+      - "--collation-server=utf8mb4_0900_ai_ci"
+
+    volumes:
+      # Docker 命名卷：由 Docker 管理实际存储位置，适合数据库数据
+      - mysql_data:/var/lib/mysql
+      # 如果希望直接在项目目录观察数据文件，可删除上一行并改用下面的绑定挂载：
+      # - ./data:/var/lib/mysql
+
+    healthcheck:
+      # $$ 会由 Compose 转义为 $，变量在容器内读取，避免 Compose 在宿主机提前展开
+      # 强制 TCP 检查；localhost 可能走 Unix Socket，让初始化用的临时服务过早判定为健康
+      test: ["CMD-SHELL", "mysqladmin ping --protocol=tcp -h 127.0.0.1 -uroot -p$${MYSQL_ROOT_PASSWORD} --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+volumes:
+  # 执行 docker compose down 时保留；只有 down -v 才会随容器一起删除
+  mysql_data:

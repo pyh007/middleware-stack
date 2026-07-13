@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: kafka
+  labels:
+    app.kubernetes.io/name: kafka
+    app.kubernetes.io/component: broker
+spec:
+  # serviceName 必须指向 Headless Service，Pod 才会获得稳定网络身份。
+  serviceName: kafka-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kafka
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kafka
+        app.kubernetes.io/component: broker
+    spec:
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        # apache/kafka 镜像使用 uid/gid 1000；fsGroup 让该用户可以写入 PVC。
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+      containers:
+        - name: kafka
+          image: apache/kafka:4.3.1
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: kafka-config
+          ports:
+            - name: external
+              containerPort: 9092
+            - name: internal
+              containerPort: 29092
+            - name: controller
+              containerPort: 9093
+          resources:
+            requests:
+              cpu: 250m
+              memory: 768Mi
+            limits:
+              cpu: "2"
+              memory: 1536Mi
+          volumeMounts:
+            - name: kafka-data
+              mountPath: /var/lib/kafka/data
+
+          # startupProbe 给第一次格式化 KRaft 存储和启动 JVM 留出时间。
+          # startupProbe 成功前，readinessProbe 和 livenessProbe 不会执行。
+          startupProbe:
+            tcpSocket:
+              port: external
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -ec
+                - /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            tcpSocket:
+              port: external
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+  # 每个 StatefulSet Pod 都会得到自己的 PVC。未指定 storageClassName，
+  # 因此 Docker Desktop 会使用当前默认 StorageClass（通常为 standard）。
+  volumeClaimTemplates:
+    - metadata:
+        name: kafka-data
+        labels:
+          app.kubernetes.io/name: kafka
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 5Gi

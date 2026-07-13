@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# 除 Namespace 自身外，所有资源都会由 Kustomize 放入这个命名空间。
+namespace: middleware-stack
+
+resources:
+  - namespace.yaml
+  - kafka-configmap.yaml
+  - kafka-services.yaml
+  - kafka-statefulset.yaml
+  - kafka-ui.yaml

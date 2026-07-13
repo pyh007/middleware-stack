@@ -1,0 +1,8 @@
+[project]
+name = "middleware-stack"
+version = "0.1.0"
+description = "Local Docker stacks and learning examples for Kafka and other middleware"
+requires-python = ">=3.12"
+dependencies = [
+    "confluent-kafka>=2.15.0",
+]

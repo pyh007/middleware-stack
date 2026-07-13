@@ -1,39 +1,68 @@
 # Headless Service 不提供负载均衡，而是给 StatefulSet Pod 创建稳定 DNS。
+# Service 属于 Kubernetes 核心 API 组，所以 apiVersion 使用 v1。
 apiVersion: v1
+
+# Service 为一组标签匹配的 Pod 提供稳定的网络访问入口。
 kind: Service
+
+# metadata 定义资源名称和便于查询的标签。
 metadata:
+  # Headless Service 的名称也被 StatefulSet 的 spec.serviceName 引用。
   name: kafka-headless
   labels:
+    # app.kubernetes.io/name 是 Kubernetes 推荐标签，表示应用的逻辑名称。
     app.kubernetes.io/name: kafka
+
+# spec 描述 Service 如何发现 Pod，以及对外提供哪些端口。
 spec:
+  # None 表示不分配 ClusterIP。DNS 会直接返回后端 Pod 地址，
+  # StatefulSet 因此可获得 kafka-0.kafka-headless... 这样的稳定域名。
   clusterIP: None
+
   # Kafka controller 必须在 Pod Ready 前即可通过稳定 DNS 相互发现。
   publishNotReadyAddresses: true
+
+  # selector 匹配 Pod 标签；匹配到的 Pod 会成为这个 Service 的 Endpoint。
   selector:
     app.kubernetes.io/name: kafka
+
+  # ports 定义 Service 暴露的端口。一个 Service 可以提供多个命名端口。
   ports:
+    # internal 用于 Broker 间通信和集群内 Kafka 客户端访问。
     - name: internal
+      # port 是客户端访问 Service 时使用的端口。
       port: 29092
+      # targetPort 引用容器中名称为 internal 的端口，而不是直接写端口号。
       targetPort: internal
+    # controller 仅用于 KRaft Controller 协议，不用于普通消息生产和消费。
     - name: controller
       port: 9093
       targetPort: controller
+
+# --- 是 YAML 文档分隔符，表示下面开始定义另一个 Kubernetes 资源。
 ---
 # 普通 ClusterIP Service 为集群内客户端提供一个稳定入口。
 apiVersion: v1
 kind: Service
 metadata:
+  # 集群内客户端通过 kafka.middleware-stack.svc.cluster.local 访问它。
   name: kafka
   labels:
     app.kubernetes.io/name: kafka
 spec:
+  # ClusterIP 是默认 Service 类型，只能从集群内部访问。
+  # 使用 kubectl port-forward 后，宿主机也可以通过转发端口访问。
   type: ClusterIP
+
+  # 这里必须和 StatefulSet Pod 模板中的标签一致，否则 Service 找不到 Kafka Pod。
   selector:
     app.kubernetes.io/name: kafka
   ports:
+    # external 对应 Kafka EXTERNAL 监听器，主要配合本机端口转发使用。
     - name: external
       port: 9092
       targetPort: external
+    # internal 是 Kubernetes 集群内应用推荐使用的 Kafka 入口。
     - name: internal
       port: 29092
       targetPort: internal

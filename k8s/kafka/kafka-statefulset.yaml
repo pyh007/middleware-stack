@@ -1,35 +1,64 @@
+# StatefulSet 属于 apps API 组，apps/v1 是当前稳定版本。
 apiVersion: apps/v1
+
+# StatefulSet 适合 Kafka 这类需要稳定 Pod 名称、网络身份和持久化存储的应用。
+# 与 Deployment 不同，Pod 重建后仍会保持 kafka-0 这样的固定序号。
 kind: StatefulSet
+
+# metadata 标识 StatefulSet 本身；Namespace 由 kustomization.yaml 统一注入。
 metadata:
   name: kafka
   labels:
+    # name 表示应用名称，component 表示它在整个系统中承担的角色。
     app.kubernetes.io/name: kafka
     app.kubernetes.io/component: broker
+
+# spec 定义 StatefulSet 希望 Kubernetes 持续维持的目标状态。
 spec:
   # serviceName 必须指向 Headless Service，Pod 才会获得稳定网络身份。
   serviceName: kafka-headless
+
+  # 学习环境只运行一个 Kafka Pod；多节点集群需要同步调整 KRaft 节点配置。
   replicas: 1
+
+  # selector 决定 StatefulSet 管理哪些 Pod，必须与 template.metadata.labels 匹配。
   selector:
     matchLabels:
       app.kubernetes.io/name: kafka
+
+  # template 是创建每个 Kafka Pod 时使用的 Pod 模板。
   template:
     metadata:
+      # Service 和 StatefulSet 都依靠这些标签找到对应 Pod。
       labels:
         app.kubernetes.io/name: kafka
         app.kubernetes.io/component: broker
     spec:
+      # Pod 收到终止信号后最多有 30 秒优雅关闭 Kafka，再由系统强制结束。
       terminationGracePeriodSeconds: 30
+
+      # Pod 级安全上下文会应用到其中的容器和挂载卷。
       securityContext:
         # apache/kafka 镜像使用 uid/gid 1000；fsGroup 让该用户可以写入 PVC。
         fsGroup: 1000
+        # 只有卷根目录属组不匹配时才递归修改，避免每次启动都扫描整个数据卷。
         fsGroupChangePolicy: OnRootMismatch
+
+      # containers 列出这个 Pod 中要运行的容器；当前只有 Kafka 主容器。
       containers:
         - name: kafka
+          # 固定 Kafka 镜像版本，避免 latest 更新后产生不可预期的行为变化。
           image: apache/kafka:4.3.1
+          # 节点本地已有镜像就直接使用，否则才从镜像仓库拉取。
           imagePullPolicy: IfNotPresent
+
+          # envFrom 将 kafka-config ConfigMap 的全部 data 键值注入为环境变量。
           envFrom:
             - configMapRef:
                 name: kafka-config
+
+          # ports 为容器端口命名，Service 和探针可以通过名称引用它们。
+          # containerPort 主要提供声明和服务发现信息，本身不等于对集群外开放端口。
           ports:
             - name: external
               containerPort: 9092
@@ -37,13 +66,19 @@ spec:
               containerPort: 29092
             - name: controller
               containerPort: 9093
+
+          # resources 同时描述调度所需的最低资源和容器可使用的上限。
           resources:
+            # requests 用于调度决策，节点至少要有这些可用资源。
             requests:
               cpu: 250m
               memory: 768Mi
+            # limits 是运行时上限；超过内存限制可能触发 OOMKill。
             limits:
               cpu: "2"
               memory: 1536Mi
+
+          # 把名为 kafka-data 的 PVC 挂载到 Kafka 配置的数据目录。
           volumeMounts:
             - name: kafka-data
               mountPath: /var/lib/kafka/data
@@ -51,11 +86,17 @@ spec:
           # startupProbe 给第一次格式化 KRaft 存储和启动 JVM 留出时间。
           # startupProbe 成功前，readinessProbe 和 livenessProbe 不会执行。
           startupProbe:
+            # 只要 Kafka 的 external TCP 端口可以连接，就认为启动完成。
             tcpSocket:
               port: external
+            # 每 5 秒检查一次，最多允许失败 60 次，即大约等待 5 分钟。
             periodSeconds: 5
             failureThreshold: 60
+
+          # readinessProbe 决定 Pod 是否可以接收来自 Service 的流量。
+          # 失败时容器不会被重启，但 Pod 会暂时从普通 Service Endpoint 中移除。
           readinessProbe:
+            # 在容器内执行 Kafka CLI，验证 Broker 不仅端口打开，而且能够处理请求。
             exec:
               command:
                 - /bin/sh
@@ -64,6 +105,8 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 6
+
+          # livenessProbe 判断进程是否已失去响应；连续失败后 kubelet 会重启容器。
           livenessProbe:
             tcpSocket:
               port: external
@@ -74,13 +117,16 @@ spec:
   # 每个 StatefulSet Pod 都会得到自己的 PVC。未指定 storageClassName，
   # 因此 Docker Desktop 会使用当前默认 StorageClass（通常为 standard）。
   volumeClaimTemplates:
+    # 模板名称必须与上方 volumeMounts.name 一致。
     - metadata:
         name: kafka-data
         labels:
           app.kubernetes.io/name: kafka
       spec:
+        # ReadWriteOnce 表示卷可以被单个节点以读写方式挂载。
         accessModes:
           - ReadWriteOnce
+        # 为每个 Kafka Pod 申请 5 GiB 持久化空间。
         resources:
           requests:
             storage: 5Gi

@@ -1,12 +1,26 @@
+# 这是 Kustomize 配置文件使用的 API 版本，不是要部署的业务资源 API 版本。
 apiVersion: kustomize.config.k8s.io/v1beta1
+
+# Kustomization 表示“如何收集和转换一组 Kubernetes 清单”。
+# kubectl 会在本地读取它；Kustomization 对象本身不会被提交到集群。
 kind: Kustomization
 
 # 除 Namespace 自身外，所有资源都会由 Kustomize 放入这个命名空间。
+# 如果某个 namespaced 资源已经写了其他 metadata.namespace，这里会覆盖它。
+# 这一行只指定目标 Namespace，不会创建 Namespace，创建动作由 namespace.yaml 完成。
 namespace: middleware-stack
 
+# resources 列出本次构建包含的所有原始清单文件。
+# 可以用 kubectl kustomize k8s/kafka 预览转换后的完整 YAML，
+# 用 kubectl apply -k k8s/kafka 一次部署下面的全部资源。
 resources:
+  # 创建 middleware-stack Namespace，使整套清单可以在空集群环境直接部署。
   - namespace.yaml
+  # 保存 Kafka KRaft、监听器、副本和 JVM 等非敏感配置。
   - kafka-configmap.yaml
+  # 创建 Kafka Headless Service 和普通 ClusterIP Service。
   - kafka-services.yaml
+  # 创建 Kafka StatefulSet 及其持久化卷声明模板。
   - kafka-statefulset.yaml
+  # 创建 Kafka UI Deployment 和对应的 ClusterIP Service。
   - kafka-ui.yaml

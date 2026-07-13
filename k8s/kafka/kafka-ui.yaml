@@ -1,36 +1,62 @@
+# Deployment 属于 apps API 组，使用稳定版本 apps/v1。
 apiVersion: apps/v1
+
+# Kafka UI 不需要固定 Pod 名称和独立持久卷，因此使用 Deployment 管理无状态 Pod。
 kind: Deployment
+
+# metadata 标识 Deployment；Namespace 由 kustomization.yaml 统一注入。
 metadata:
   name: kafka-ui
   labels:
+    # name 是应用逻辑名称，component 表明它是可视化管理面板。
     app.kubernetes.io/name: kafka-ui
     app.kubernetes.io/component: dashboard
+
+# spec 描述 Deployment 的副本数、Pod 选择器和 Pod 模板。
 spec:
+  # 运行一个 Kafka UI 实例，足够本地学习使用。
   replicas: 1
+
+  # selector 必须与 template.metadata.labels 匹配，Deployment 才能管理对应 Pod。
   selector:
     matchLabels:
       app.kubernetes.io/name: kafka-ui
+
+  # template 定义 Deployment 创建的 Pod。
   template:
     metadata:
+      # kafka-ui Service 使用 app.kubernetes.io/name 标签选择这个 Pod。
       labels:
         app.kubernetes.io/name: kafka-ui
         app.kubernetes.io/component: dashboard
     spec:
       containers:
         - name: kafka-ui
+          # latest 会随着上游发布变化，适合学习但不利于生产环境稳定复现；
+          # 生产环境应改为经过验证的明确版本号。
           image: provectuslabs/kafka-ui:latest
+          # 本机已有镜像就复用，没有时才拉取。
           imagePullPolicy: IfNotPresent
+
+          # env 用于直接声明少量环境变量；大量共享配置可考虑使用 ConfigMap。
           env:
+            # 在 Kafka UI 页面中显示的集群名称，只是界面标识。
             - name: KAFKA_CLUSTERS_0_NAME
               value: docker-desktop-kafka
             # Pod 内不能用 localhost 访问另一个 Pod，要通过 Kafka Service 访问。
+            # 完整 Service DNS 可以跨 Namespace 解析；29092 是 INTERNAL 监听端口。
             - name: KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS
               value: kafka.middleware-stack.svc.cluster.local:29092
+            # 允许在 Kafka UI 中动态调整集群连接配置，仅建议在学习环境开启。
             - name: DYNAMIC_CONFIG_ENABLED
               value: "true"
+
+          # 声明 UI 容器监听的 HTTP 端口，并命名为 http 供 Service/探针引用。
           ports:
             - name: http
               containerPort: 8080
+
+          # requests 影响 Pod 调度，limits 限制容器运行时最多可使用的资源。
           resources:
             requests:
               cpu: 100m
@@ -38,33 +64,48 @@ spec:
             limits:
               cpu: "1"
               memory: 768Mi
+
+          # startupProbe 在 UI 第一次启动时提供最长约 5 分钟的准备时间。
           startupProbe:
             tcpSocket:
               port: http
             periodSeconds: 5
             failureThreshold: 60
+
+          # readinessProbe 失败时，Pod 会从 Service Endpoint 中移除，不再接收请求。
           readinessProbe:
             tcpSocket:
               port: http
             periodSeconds: 10
             failureThreshold: 6
+
+          # livenessProbe 连续失败时，kubelet 会重启 Kafka UI 容器。
           livenessProbe:
             tcpSocket:
               port: http
             periodSeconds: 20
             failureThreshold: 3
+
+# 同一个文件可以使用 --- 分隔并定义多个 Kubernetes 资源。
 ---
+# Service 使用核心 API v1。
 apiVersion: v1
+
+# 为 Kafka UI Pod 提供稳定的集群内访问地址。
 kind: Service
 metadata:
   name: kafka-ui
   labels:
     app.kubernetes.io/name: kafka-ui
 spec:
+  # ClusterIP 只在 Kubernetes 集群内可访问；本机访问可使用 kubectl port-forward。
   type: ClusterIP
+
+  # 选择上方 Deployment 创建的 Kafka UI Pod。
   selector:
     app.kubernetes.io/name: kafka-ui
   ports:
     - name: http
+      # Service 对客户端暴露 8080，并转发到容器中名称为 http 的端口。
       port: 8080
       targetPort: http

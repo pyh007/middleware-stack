@@ -15,6 +15,8 @@
 
 Kafka 使用 StatefulSet，Pod 名称固定为 `kafka-0`，数据写入 `kafka-data-kafka-0` PVC。Kafka UI 本身不保存关键数据，因此使用 Deployment。
 
+更详细的资源职责和资源关系见 [RESOURCES.md](./RESOURCES.md)。
+
 ## 渲染与校验
 
 先确认当前上下文确实是 Docker Desktop，避免操作错误的集群：

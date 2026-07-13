@@ -36,11 +36,13 @@ services:
       KAFKA_NUM_PARTITIONS: 3
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
 
-      # 数据目录
-      KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
+      # 官方镜像预先创建并授权给 appuser(uid=1000) 的数据目录
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
 
     volumes:
-      - ./data:/tmp/kraft-combined-logs
+      # Docker 命名卷：Topic 消息、Offset 和 KRaft 元数据均由 Docker 管理
+      # 挂载到镜像预设目录，首次创建卷时会继承正确的 1000:0 权限
+      - kafka_data:/var/lib/kafka/data
 
     healthcheck:
       test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1"]
@@ -62,3 +64,7 @@ services:
       # 注意：容器内部访问 Kafka，不能用 localhost:9092，要用 kafka:29092
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
       DYNAMIC_CONFIG_ENABLED: "true"
+
+volumes:
+  # down 时保留数据；down -v 时删除命名卷及其中的 Kafka 数据
+  kafka_data:

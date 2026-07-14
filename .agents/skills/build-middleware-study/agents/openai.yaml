@@ -1,0 +1,4 @@
+interface:
+  display_name: "中间件学习体系构建器"
+  short_description: "构建可实验、可复习并面向面试与生产的中间件学习课程"
+  default_prompt: "使用 $build-middleware-study 为 Redis 构建一套可运行、可复习的学习体系。"

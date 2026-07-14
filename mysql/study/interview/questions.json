@@ -1,0 +1,402 @@
+[
+  {
+    "topic": "table-design",
+    "question": "InnoDB 表为什么不宜随意使用很长的字符串主键？",
+    "answer": [
+      "聚簇索引叶子节点保存整行，二级索引叶子节点还会保存主键值。",
+      "长主键会放大所有二级索引，影响存储、缓存命中和比较成本。",
+      "还要结合全局唯一、写入顺序、业务变更和信息暴露说明取舍。"
+    ],
+    "lab": "labs/01-table-design/lab.sql"
+  },
+  {
+    "topic": "table-design",
+    "question": "金额字段为什么通常不用 FLOAT？",
+    "answer": [
+      "FLOAT 是二进制浮点近似值，很多十进制小数不能被精确表示。",
+      "DECIMAL 提供精确十进制语义；也可按业务选择整数最小货币单位。",
+      "还需定义币种、最大范围、精度和舍入规则。"
+    ],
+    "lab": "labs/01-table-design/lab.sql"
+  },
+  {
+    "topic": "table-design",
+    "question": "DATETIME 与 TIMESTAMP 如何选择？",
+    "answer": [
+      "TIMESTAMP 会按会话时区转换且范围相对有限，DATETIME 保存字面时间。",
+      "跨时区时间点常统一保存 UTC 并在应用层转换。",
+      "生日和营业日等当地日历值不能机械地当作 UTC 时间点。"
+    ],
+    "lab": "labs/01-table-design/README.md"
+  },
+  {
+    "topic": "table-design",
+    "question": "外键应该用还是不用？",
+    "answer": [
+      "外键为所有写入入口提供引用完整性，是数据质量的最后防线。",
+      "它带来写入检查、锁和变更顺序约束，也无法跨分库边界。",
+      "答案取决于一致性价值、规模、架构和团队治理，不能绝对化。"
+    ],
+    "lab": "labs/01-table-design/lab.sql"
+  },
+  {
+    "topic": "table-design",
+    "question": "为什么订单明细经常冗余商品名称和成交价？",
+    "answer": [
+      "订单记录交易发生时的历史事实，不能随商品当前信息变化。",
+      "冗余快照是有意的反范式设计，要明确写入时机和不可变规则。",
+      "商品 ID 仍可保留用于关联，但不是历史事实的唯一来源。"
+    ],
+    "lab": "labs/01-table-design/exercises.md"
+  },
+  {
+    "topic": "index",
+    "question": "什么是回表和覆盖索引？",
+    "answer": [
+      "二级索引取得主键后，再访问聚簇索引读取其他列叫回表。",
+      "查询所需列都能从索引获得时是覆盖索引，通常可减少随机访问。",
+      "覆盖索引会变宽，增加空间、缓存和写入维护成本。"
+    ],
+    "lab": "labs/02-index/lab.sql"
+  },
+  {
+    "topic": "index",
+    "question": "联合索引 (a,b,c) 查询 b 时一定完全没用吗？",
+    "answer": [
+      "缺少 a 通常无法根据完整有序前缀直接定位连续范围。",
+      "优化器仍可能选择全索引扫描、覆盖或特定版本的跳跃扫描。",
+      "要区分定位、过滤、覆盖，并以执行计划和实际行数验证。"
+    ],
+    "lab": "labs/02-index/lab.sql"
+  },
+  {
+    "topic": "index",
+    "question": "范围条件之后的索引列是否全部失效？",
+    "answer": [
+      "后续列通常不能继续缩小同一个连续索引范围。",
+      "它仍可能参与索引条件下推、过滤或覆盖，并非完全无效。",
+      "排序能否利用索引还要结合等值前缀、范围列和排序方向。"
+    ],
+    "lab": "labs/02-index/lab.sql"
+  },
+  {
+    "topic": "index",
+    "question": "为什么优化器没有选择你刚创建的索引？",
+    "answer": [
+      "可能返回比例高、回表贵、统计信息不准、数据倾斜或排序不匹配。",
+      "先确认真实参数、统计信息和 EXPLAIN ANALYZE，不急于 FORCE INDEX。",
+      "索引对一个查询有效，不代表总成本和其他候选相比最低。"
+    ],
+    "lab": "labs/02-index/lab.sql"
+  },
+  {
+    "topic": "index",
+    "question": "新增索引上线前需要评估哪些风险？",
+    "answer": [
+      "构建期的 CPU、IO、临时磁盘、元数据锁和复制延迟。",
+      "长期的写放大、页分裂、磁盘和 buffer pool 占用。",
+      "DDL 算法、低峰或灰度、监控指标以及删除或回滚方案。"
+    ],
+    "lab": "labs/02-index/answers.md"
+  },
+  {
+    "topic": "sql-tuning",
+    "question": "收到数据库很慢的反馈后，第一步是什么？",
+    "answer": [
+      "先确认时间范围、业务影响、吞吐延迟和系统资源，避免直接猜索引。",
+      "捕获目标 SQL、真实参数、频率、总耗时、返回量和等待类型。",
+      "保存表结构、索引、数据分布与执行计划，形成可比较基线。"
+    ],
+    "lab": "runbooks/slow-query.md"
+  },
+  {
+    "topic": "sql-tuning",
+    "question": "为什么 DATE(created_at)=? 往往不如半开范围？",
+    "answer": [
+      "普通索引按 created_at 原值有序，对每行计算函数通常不能直接定位原值范围。",
+      "半开范围可以使用 B+Tree 范围扫描，也不依赖字段秒或微秒精度。",
+      "函数索引或生成列也可选，但会增加存储和写入维护成本。"
+    ],
+    "lab": "labs/03-sql-tuning/lab.sql"
+  },
+  {
+    "topic": "sql-tuning",
+    "question": "深分页为什么慢，游标分页有什么限制？",
+    "answer": [
+      "LIMIT offset,size 仍需找到并丢弃 offset 之前的行。",
+      "游标分页从稳定排序键继续，扫描量稳定，但不适合任意跳页。",
+      "排序键要稳定且最好唯一，还要定义并发数据变化时的一致性。"
+    ],
+    "lab": "labs/03-sql-tuning/lab.sql"
+  },
+  {
+    "topic": "sql-tuning",
+    "question": "EXPLAIN ANALYZE 为什么不能在生产随便执行？",
+    "answer": [
+      "它会真实执行 SQL，而不是只展示估算计划。",
+      "重查询会真实消耗资源，写 SQL 还可能改变数据或持有锁。",
+      "应先评估风险，必要时在副本、影子环境或受控事务中分析。"
+    ],
+    "lab": "labs/03-sql-tuning/answers.md"
+  },
+  {
+    "topic": "sql-tuning",
+    "question": "怎样证明一个 SQL 优化可以安全上线？",
+    "answer": [
+      "用代表性参数验证结果集一致、实际行数和延迟改善。",
+      "同时评估写入、锁、缓存、磁盘和复制延迟，而非只看单次查询。",
+      "准备灰度指标、完整业务周期观察和可执行回滚方案。"
+    ],
+    "lab": "cases/slow-order-query/README.md"
+  },
+  {
+    "topic": "transaction-mvcc",
+    "question": "READ COMMITTED 和 REPEATABLE READ 的 Read View 有什么差异？",
+    "answer": [
+      "RC 通常每条一致性读创建新视图，因此能看到后来已提交版本。",
+      "RR 通常复用第一次一致性读的视图，使事务内普通查询可重复。",
+      "锁定读属于当前读，不能用快照读结论直接推断。"
+    ],
+    "lab": "labs/04-transaction-mvcc/lab.py"
+  },
+  {
+    "topic": "transaction-mvcc",
+    "question": "普通 SELECT 和 SELECT FOR UPDATE 为什么可能看到不同值？",
+    "answer": [
+      "普通 SELECT 通常按 Read View 读取可见历史版本。",
+      "FOR UPDATE 是当前读，要读取并锁定最新满足条件版本。",
+      "混用时必须按具体时间线证明业务正确性。"
+    ],
+    "lab": "labs/04-transaction-mvcc/lab.py"
+  },
+  {
+    "topic": "transaction-mvcc",
+    "question": "MVCC 是否意味着查询永远不加锁？",
+    "answer": [
+      "不是，写操作和 FOR UPDATE/FOR SHARE 等锁定读仍会加锁。",
+      "普通快照读也可能等待元数据锁或其他非记录资源。",
+      "MVCC 主要减少一致性读与写之间的记录锁冲突。"
+    ],
+    "lab": "labs/04-transaction-mvcc/answers.md"
+  },
+  {
+    "topic": "transaction-mvcc",
+    "question": "如何避免库存读改写造成超卖？",
+    "answer": [
+      "可使用 UPDATE stock=stock-1 WHERE stock>0 的条件原子更新。",
+      "也可使用 FOR UPDATE 悲观锁或版本号乐观锁。",
+      "必须检查受影响行数，并定义失败、幂等和重试。"
+    ],
+    "lab": "labs/04-transaction-mvcc/exercises.md"
+  },
+  {
+    "topic": "transaction-mvcc",
+    "question": "为什么事务中不应调用耗时远程接口？",
+    "answer": [
+      "它延长连接、锁、undo 历史版本和事务资源占用。",
+      "远程超时会放大死锁和失败恢复的不确定性。",
+      "通常应缩短数据库事务，再用幂等、消息或补偿协调。"
+    ],
+    "lab": "labs/04-transaction-mvcc/README.md"
+  },
+  {
+    "topic": "locks",
+    "question": "如何从锁等待找到根阻塞事务？",
+    "answer": [
+      "从 data_lock_waits 关联请求事务与阻塞事务。",
+      "沿 blocking 方向继续查找，直到事务不再等待其他事务。",
+      "根阻塞连接可能处于 Sleep，但持有未提交事务。"
+    ],
+    "lab": "labs/05-lock-deadlock/lab.py"
+  },
+  {
+    "topic": "locks",
+    "question": "死锁与普通锁等待超时有什么区别？",
+    "answer": [
+      "死锁存在循环依赖，InnoDB 可检测并立即选择牺牲者。",
+      "普通等待没有环，需要等待持有者释放或达到超时。",
+      "两者都应定位事务边界、访问顺序和索引范围。"
+    ],
+    "lab": "labs/05-lock-deadlock/lab.py"
+  },
+  {
+    "topic": "locks",
+    "question": "发生死锁后应该重试最后一条 SQL 还是整个事务？",
+    "answer": [
+      "应从完整事务边界重试，因为牺牲者事务已整体回滚。",
+      "重试必须幂等、限制次数并带退避。",
+      "只重试最后一条 SQL 可能破坏业务原子性。"
+    ],
+    "lab": "labs/05-lock-deadlock/answers.md"
+  },
+  {
+    "topic": "locks",
+    "question": "缺少合适索引为什么可能扩大锁影响？",
+    "answer": [
+      "InnoDB 根据索引访问并对记录或范围加锁。",
+      "扫描更多记录会增加冲突机会并延长持锁时间。",
+      "最终修改行少不代表访问和锁检查范围小。"
+    ],
+    "lab": "labs/05-lock-deadlock/README.md"
+  },
+  {
+    "topic": "locks",
+    "question": "统一加锁顺序为什么能减少死锁？",
+    "answer": [
+      "相同资源顺序不容易形成 A 等 B、B 又等 A 的环。",
+      "它不能替代短事务、合理索引和小批次。",
+      "跨服务资源还要统一全局顺序或采用其他协调机制。"
+    ],
+    "lab": "labs/05-lock-deadlock/exercises.md"
+  },
+  {
+    "topic": "innodb",
+    "question": "redo log、undo log 和 binlog 分别做什么？",
+    "answer": [
+      "redo 支撑 InnoDB 页修改的崩溃恢复。",
+      "undo 支撑事务回滚和 MVCC 历史版本。",
+      "binlog 是 Server 层变更日志，用于复制和时间点恢复。"
+    ],
+    "lab": "labs/06-innodb/lab.sql"
+  },
+  {
+    "topic": "innodb",
+    "question": "为什么提交时不直接同步刷新所有数据页？",
+    "answer": [
+      "数据页大且位置分散，同步刷页会显著增加提交延迟。",
+      "WAL 先顺序写较小 redo，脏页随后异步刷新。",
+      "崩溃时可重放 redo 恢复已提交修改。"
+    ],
+    "lab": "labs/06-innodb/answers.md"
+  },
+  {
+    "topic": "innodb",
+    "question": "redo 与 binlog 两阶段提交要解决什么问题？",
+    "answer": [
+      "避免 InnoDB 已提交但复制日志缺失。",
+      "也避免 binlog 已记录但 InnoDB 最终没有提交。",
+      "目标是协调存储状态与复制/恢复日志状态。"
+    ],
+    "lab": "labs/06-innodb/README.md"
+  },
+  {
+    "topic": "innodb",
+    "question": "buffer pool 命中率很高是否代表没有 IO 压力？",
+    "answer": [
+      "不一定，总请求量大时小比例未命中仍可能产生大量读取。",
+      "刷脏、redo、binlog、临时文件也会产生 IO。",
+      "应比较时间窗口增量、延迟、队列和业务负载。"
+    ],
+    "lab": "labs/06-innodb/lab.sql"
+  },
+  {
+    "topic": "innodb",
+    "question": "长事务为什么会造成 undo 历史膨胀？",
+    "answer": [
+      "活跃 Read View 可能仍需旧版本，purge 不能清理。",
+      "历史链变长会增加空间和部分查询成本。",
+      "需要定位长事务并从业务边界缩短，而非只调大空间。"
+    ],
+    "lab": "labs/06-innodb/exercises.md"
+  },
+  {
+    "topic": "replication-recovery",
+    "question": "RPO 和 RTO 分别是什么？",
+    "answer": [
+      "RPO 是最多可接受丢失多长时间的数据。",
+      "RTO 是故障后最多可接受多久恢复服务。",
+      "两者共同决定备份、日志、复制、自动化和成本。"
+    ],
+    "lab": "labs/07-replication-backup/README.md"
+  },
+  {
+    "topic": "replication-recovery",
+    "question": "为什么主从复制不能替代备份？",
+    "answer": [
+      "误删、错误更新和部分攻击会被复制到副本。",
+      "复制主要解决可用性和读扩展，不保存独立历史版本。",
+      "备份必须隔离、异地并经过真实恢复校验。"
+    ],
+    "lab": "labs/07-replication-backup/backup-restore.sh"
+  },
+  {
+    "topic": "replication-recovery",
+    "question": "GTID 给复制和切换带来什么价值？",
+    "answer": [
+      "每个提交事务有全局标识，可比较已执行集合。",
+      "副本能自动寻找缺失事务，减少手工文件位点管理。",
+      "GTID 不会自动保证副本无延迟或切换无数据损失。"
+    ],
+    "lab": "labs/07-replication-backup/setup-replication.sh"
+  },
+  {
+    "topic": "replication-recovery",
+    "question": "副本延迟时写后读如何处理？",
+    "answer": [
+      "可以将一致性敏感读取路由到主库。",
+      "也可等待副本追到写入位点，超时后降级。",
+      "策略要结合延迟预算、主库容量和业务一致性。"
+    ],
+    "lab": "labs/07-replication-backup/answers.md"
+  },
+  {
+    "topic": "replication-recovery",
+    "question": "如何证明备份真正可用？",
+    "answer": [
+      "定期在隔离环境实际恢复基线和日志链。",
+      "校验对象、核心数据、约束并启动应用验证。",
+      "记录真实 RPO/RTO，而不是只看备份任务成功。"
+    ],
+    "lab": "labs/07-replication-backup/backup-restore.sh"
+  },
+  {
+    "topic": "production",
+    "question": "Threads_connected 很高是否一定代表数据库过载？",
+    "answer": [
+      "不一定，连接可能大多空闲。",
+      "还要看 Threads_running、连接池等待、事务、CPU、IO 和锁。",
+      "应与历史基线和业务延迟一起判断。"
+    ],
+    "lab": "labs/08-production-ops/lab.sql"
+  },
+  {
+    "topic": "production",
+    "question": "连接池为什么不能配置得越大越好？",
+    "answer": [
+      "过多并发增加内存、上下文切换、锁冲突和排队。",
+      "应用实例数乘以单池上限必须纳入实例总预算。",
+      "需要背压、获取超时和泄漏监控。"
+    ],
+    "lab": "labs/08-production-ops/answers.md"
+  },
+  {
+    "topic": "production",
+    "question": "在线 DDL 是否意味着完全没有锁和风险？",
+    "answer": [
+      "不是，开始和结束阶段仍可能需要元数据锁。",
+      "构建会消耗 IO、CPU、临时空间并造成复制延迟。",
+      "必须评估算法、容量、窗口、监控和回滚。"
+    ],
+    "lab": "runbooks/production-checklist.md"
+  },
+  {
+    "topic": "production",
+    "question": "为什么不能看到 unused index 就立即删除？",
+    "answer": [
+      "统计窗口可能未覆盖低频、月末或容灾任务。",
+      "重启和统计配置会影响观测结果。",
+      "应验证完整周期、查询计划、依赖和重建方案。"
+    ],
+    "lab": "labs/08-production-ops/lab.sql"
+  },
+  {
+    "topic": "production",
+    "question": "数据库事故的前五分钟应该做什么？",
+    "answer": [
+      "确认业务影响并使用已批准的限流、降级或暂停非核心任务止损。",
+      "同时保存连接、SQL、锁、事务、系统和复制现场。",
+      "避免未评估就重启、切主或终止关键事务。"
+    ],
+    "lab": "cases/production-incident/README.md"
+  }
+]

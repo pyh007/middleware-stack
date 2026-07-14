@@ -25,6 +25,11 @@ services:
       - "--character-set-server=utf8mb4"
       # MySQL 8 默认排序规则：不区分大小写，支持多语言排序
       - "--collation-server=utf8mb4_0900_ai_ci"
+      # 学习环境记录超过 200ms 的查询，便于练习慢 SQL 定位。
+      - "--slow-query-log=ON"
+      - "--long-query-time=0.2"
+      # 写入 mysql.slow_log 表，实验时可直接使用 SQL 查询。
+      - "--log-output=TABLE"
 
     volumes:
       # Docker 命名卷：由 Docker 管理实际存储位置，适合数据库数据

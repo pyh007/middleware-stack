@@ -70,7 +70,7 @@ KAFKA_BOOTSTRAP_SERVERS=localhost:19092 \
 
 ```bash
 kubectl exec -n middleware-stack kafka-0 -- \
-  /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list # 进入 Kafka Pod 执行工具并列出全部 Topic；-- 分隔 kubectl 与容器命令
+  /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:29092 --list # Pod 内走 INTERNAL listener，避免 EXTERNAL advertised 地址指向宿主机端口
 ```
 
 ## 更新、回滚与清理

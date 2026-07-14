@@ -1,18 +1,15 @@
-# Kubernetes 学习目录
+# Kubernetes 本地运行与学习入口
 
-`k8s/` 是与 `kafka/`、未来的 `redis/`、`mysql/` 平级的学习主题。虽然 Kubernetes 本质上是容器编排平台，但本仓库将它作为一个独立的基础设施组件进行学习。
+`k8s/` 是独立的基础设施学习主题。根目录保存集群命令入口和可部署运行清单，完整课程、练习、答案、复习与事故案例统一放在 [study/](study/README.md)。
 
-当前示例：
+当前运行环境使用本机 Docker Desktop Kubernetes；课程脚本默认只允许 `docker-desktop` 上下文，并把实验隔离在带 `middleware-stack.dev/study=true` 标签的 `k8s-study-*` Namespace。不会修改其他 Namespace，也不会停止 Docker Desktop。
 
-- `kafka/`：使用 Namespace、ConfigMap、Service、StatefulSet、PVC、Deployment 和 Kustomize，在 Docker Desktop Kubernetes 中运行 Kafka 与 Kafka UI。
-
-后续可以继续增加：
-
-```text
-k8s/
-├── kafka/
-├── redis/
-└── mysql/
+```bash
+make -C k8s help
+make -C k8s up
+make -C k8s all
 ```
 
-每个子目录保持独立，可以单独执行 `kubectl apply -k` 和 `kubectl delete -k`。
+`kafka/` 是可部署的单节点 Kafka/Kafka UI 运行清单，作为课程最终综合案例。它使用 `middleware-stack` Namespace 和持久卷，不包含在安全全量任务中。部署、重启或清理前应先阅读 [Kafka 运行说明](kafka/README.md)；课程侧的事故分析见 [Kafka 综合事故](study/cases/kafka-incident/README.md)。
+
+集群级的节点中断、etcd 恢复、多节点升级不在当前单节点 Docker Desktop 默认课程中运行。它们需要单独、可销毁的集群，并且只能通过未来增加的显式命令执行。

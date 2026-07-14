@@ -33,6 +33,9 @@ spec:
       labels:
         app.kubernetes.io/name: kafka
         app.kubernetes.io/component: broker
+      annotations:
+        # envFrom 的 ConfigMap 内容变化不会自动重建 Pod；修改该修订值触发受控更新。
+        middleware-stack.dev/config-revision: "2026-07-14-01"
     spec:
       # Pod 收到终止信号后最多有 30 秒优雅关闭 Kafka，再由系统强制结束。
       terminationGracePeriodSeconds: 30
@@ -82,6 +85,10 @@ spec:
           volumeMounts:
             - name: kafka-data
               mountPath: /var/lib/kafka/data
+            # GC 日志属于可丢失的运行时诊断数据。使用受限的内存型 emptyDir，
+            # 避免节点容器层空间不足时 Kafka 因无法创建 /opt/kafka/logs 而启动失败。
+            - name: kafka-runtime-logs
+              mountPath: /opt/kafka/logs
 
           # startupProbe 给第一次格式化 KRaft 存储和启动 JVM 留出时间。
           # startupProbe 成功前，readinessProbe 和 livenessProbe 不会执行。
@@ -101,9 +108,11 @@ spec:
               command:
                 - /bin/sh
                 - -ec
-                - /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null
+                # Pod 内使用 INTERNAL listener；EXTERNAL listener 会返回宿主机
+                # localhost:19092，这个 advertised 地址在 Pod 内不可达。
+                - /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:29092 --list >/dev/null
             periodSeconds: 10
-            timeoutSeconds: 5
+            timeoutSeconds: 10
             failureThreshold: 6
 
           # livenessProbe 判断进程是否已失去响应；连续失败后 kubelet 会重启容器。
@@ -113,6 +122,12 @@ spec:
             periodSeconds: 20
             timeoutSeconds: 5
             failureThreshold: 3
+
+      volumes:
+        - name: kafka-runtime-logs
+          emptyDir:
+            medium: Memory
+            sizeLimit: 128Mi
 
   # 每个 StatefulSet Pod 都会得到自己的 PVC。未指定 storageClassName，
   # 因此 Docker Desktop 会使用当前默认 StorageClass（通常为 standard）。

@@ -32,9 +32,8 @@ spec:
     spec:
       containers:
         - name: kafka-ui
-          # latest 会随着上游发布变化，适合学习但不利于生产环境稳定复现；
-          # 生产环境应改为经过验证的明确版本号。
-          image: provectuslabs/kafka-ui:latest
+          # 固定版本，保证课程清单可重复；生产环境还应固定并验证镜像 digest。
+          image: provectuslabs/kafka-ui:v0.7.2
           # 本机已有镜像就复用，没有时才拉取。
           imagePullPolicy: IfNotPresent
 

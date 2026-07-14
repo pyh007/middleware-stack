@@ -1,0 +1,98 @@
+[
+  {
+    "topic": "架构与调谐",
+    "question": "一次 kubectl apply 到 Pod Ready 经过哪些关键组件？",
+    "answer": ["API Server 完成认证、授权、准入并持久化对象", "Deployment/ReplicaSet 控制器创建并维持 Pod", "Scheduler 选择节点，kubelet 驱动运行时并回写状态", "最后还要用探针和业务请求验证，而非只看 apply 成功"],
+    "lab": "labs/01-architecture-reconciliation/README.md"
+  },
+  {
+    "topic": "架构与调谐",
+    "question": "generation 与 observedGeneration 不相等说明什么？",
+    "answer": ["期望状态已经变更，但控制器还没有把该版本反映到 status", "结合 conditions、Events 与控制器健康区分正常延迟和调谐停滞", "生产发布应等待版本追平并验证可用副本与业务指标"],
+    "lab": "labs/01-architecture-reconciliation/lab.sh"
+  },
+  {
+    "topic": "工作负载",
+    "question": "startup、readiness、liveness 三类探针如何分工？",
+    "answer": ["startup 保护慢启动，成功前抑制另外两类", "readiness 控制是否进入 Service 可用端点，失败通常不重启", "liveness 判断本进程不可恢复，连续失败触发重启", "依赖短暂故障不应轻易放入 liveness"],
+    "lab": "labs/02-workloads-lifecycle/README.md"
+  },
+  {
+    "topic": "工作负载",
+    "question": "Deployment rollout 完成为什么仍不能断言发布成功？",
+    "answer": ["Kubernetes condition 不理解业务正确性", "还要验证错误率、尾延迟、依赖与数据兼容", "发布必须具备终止指标、观察窗口与可执行回滚"],
+    "lab": "labs/02-workloads-lifecycle/lab.sh"
+  },
+  {
+    "topic": "网络",
+    "question": "Service 有 ClusterIP 但请求失败，应按什么顺序排查？",
+    "answer": ["从调用方确认 DNS 与错误类型", "检查 Service selector、port/targetPort 和 EndpointSlice", "检查 Pod Ready、进程监听与 NetworkPolicy", "每一步保存证据并只改变一个变量"],
+    "lab": "labs/03-networking-discovery/README.md"
+  },
+  {
+    "topic": "网络",
+    "question": "Headless Service 和普通 Service 的核心区别是什么？",
+    "answer": ["Headless 不分配 ClusterIP，DNS 返回后端地址", "普通 Service 提供稳定虚拟 IP 和数据面转发", "Headless 常用于 StatefulSet 稳定身份或客户端发现，但客户端需承担更多故障处理"],
+    "lab": "labs/03-networking-discovery/lab.sh"
+  },
+  {
+    "topic": "安全",
+    "question": "为什么 Kubernetes Secret 不等于生产密钥管理已经完成？",
+    "answer": ["base64 不是加密", "还需要 etcd 静态加密、最小 RBAC、外部密钥系统与短期凭证", "需要轮换、审计、泄露响应和应用重新加载验证"],
+    "lab": "labs/04-config-security/README.md"
+  },
+  {
+    "topic": "安全",
+    "question": "如何证明一个 ServiceAccount 满足最小权限？",
+    "answer": ["列出业务实际需要的 verb、resource、subresource 和 Namespace", "用 Role/RoleBinding 授予最小集合", "通过 kubectl auth can-i 同时验证允许和拒绝路径", "结合审计日志验证真实使用"],
+    "lab": "labs/04-config-security/lab.sh"
+  },
+  {
+    "topic": "存储",
+    "question": "StatefulSet 加 PVC 为什么仍不等于应用高可用？",
+    "answer": ["StatefulSet 提供稳定身份、顺序和独立卷模板", "它不实现应用复制、选主、quorum、备份或跨故障域", "高可用要结合应用协议、拓扑分散和恢复演练"],
+    "lab": "labs/05-storage-stateful/README.md"
+  },
+  {
+    "topic": "存储",
+    "question": "删除 PVC 前必须确认什么？",
+    "answer": ["PV reclaimPolicy 与底层存储删除语义", "备份、快照和恢复演练是否真实可用", "RPO/RTO、数据所有者和权限审批", "是否存在仍挂载或依赖该卷的工作负载"],
+    "lab": "labs/05-storage-stateful/lab.sh"
+  },
+  {
+    "topic": "调度与资源",
+    "question": "requests 和 limits 对调度及运行时分别有什么影响？",
+    "answer": ["Scheduler 主要按 requests 与节点 allocatable 做放置", "CPU limit 通常表现为节流，内存 limit 超出常见 OOMKilled", "配置需由工作集、尾延迟、峰值和节点故障余量验证"],
+    "lab": "labs/06-scheduling-resources/README.md"
+  },
+  {
+    "topic": "调度与资源",
+    "question": "PDB 能否避免节点突然宕机造成不可用？",
+    "answer": ["不能，PDB 主要约束 drain 等自愿中断", "节点突然故障属于非自愿中断", "仍需足够副本、反亲和、拓扑分散和容量余量"],
+    "lab": "labs/06-scheduling-resources/pending-failure.sh"
+  },
+  {
+    "topic": "可观测性",
+    "question": "CrashLoopBackOff 时应保存哪些短生命周期证据？",
+    "answer": ["Pod YAML、describe、conditions、lastState、exitCode 与 restartCount", "当前日志及 logs --previous", "按时间 Events、版本、配置引用和最近变更", "节点资源与业务影响时间线"],
+    "lab": "labs/07-observability-troubleshooting/README.md"
+  },
+  {
+    "topic": "可观测性",
+    "question": "为什么重启后恢复不能作为事故结束条件？",
+    "answer": ["重启可能只清除症状并丢失现场", "必须验证业务、数据一致性、资源趋势和告警", "需要定位根因、评估复发风险并验证长期措施"],
+    "lab": "runbooks/production-troubleshooting.md"
+  },
+  {
+    "topic": "生产事故",
+    "question": "Kafka Pod 被重建为何不证明消息没有丢失？",
+    "answer": ["控制器只恢复副本数量，不理解 Kafka 消息语义", "数据结果取决于 ack、持久化、PVC、ISR、quorum 与客户端重试", "必须用 Topic、消息、offset 和业务一致性做恢复验证"],
+    "lab": "cases/kafka-incident/README.md"
+  },
+  {
+    "topic": "集群管理",
+    "question": "为什么 etcd 恢复和节点故障实验不能放进安全全量任务？",
+    "answer": ["它们影响整个集群而非隔离 Namespace", "可能造成控制面不可用、对象回退和其他工作负载中断", "必须使用独立可销毁集群、显式命令、二次确认和完整清理验证"],
+    "lab": "runbooks/cluster-admin-boundary.md"
+  }
+]

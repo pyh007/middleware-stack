@@ -11,7 +11,7 @@ from typing import Any
 # 脚本运行在宿主机，因此连接 docker-compose.yml 暴露出来的 9092 端口。
 # 如果以后连接远程 Kafka，可以在命令前设置：
 # KAFKA_BOOTSTRAP_SERVERS=host1:9092,host2:9092 uv run ...
-BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
+BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "127.0.0.1:9092")
 DEFAULT_TOPIC = os.getenv("KAFKA_TOPIC", "learning-events")
 
 

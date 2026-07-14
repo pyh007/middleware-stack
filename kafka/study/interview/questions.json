@@ -1,0 +1,210 @@
+[
+  {
+    "topic": "records-partitions",
+    "question": "Kafka 能保证消息全局有序吗？",
+    "answer": [
+      "结论：Kafka 原生只保证单 partition 追加顺序，不保证跨 partition 全局顺序。",
+      "机制：每个 partition 有独立 Leader、日志和 offset，跨 partition 没有共同序号。",
+      "证据：01 实验按 partition 展示 offset 递增，而不同 partition 的 offset 可同时从 0 开始。",
+      "边界：相同 key 仅在分区数和 partitioner 不变时通常保持同一分区。",
+      "副作用：用单 partition 换全局顺序会限制吞吐、扩展与故障恢复。",
+      "生产验证：抽样 event_id/key/partition/offset，并验证业务状态机没有倒退。"
+    ],
+    "lab": "labs/01-records-partitions/lab.py"
+  },
+  {
+    "topic": "records-partitions",
+    "question": "Kafka 分区数是否越多越好？",
+    "answer": [
+      "结论：分区数是并行度与系统成本的取舍，不是越多越好。",
+      "机制：同组消费并行度受分区数上限约束，但每个分区也增加日志、元数据和副本工作。",
+      "证据：01 实验可修改分区数比较 key 映射与分区分布。",
+      "边界：热点 key 不能仅靠增加分区解决，扩分区还可能改变 key 路由。",
+      "副作用：更多文件、Leader、再均衡、Controller 元数据和恢复时间。",
+      "生产验证：按最热分区压测吞吐，并记录 assignment、恢复时间与 Broker 资源。"
+    ],
+    "lab": "labs/01-records-partitions/README.md"
+  },
+  {
+    "topic": "producer-reliability",
+    "question": "acks=all 是否意味着数据绝不会丢？",
+    "answer": [
+      "结论：不是；它只等待当前 ISR，保证还取决于 RF、min ISR 和选举策略。",
+      "机制：RF=1 时 ISR 只有 Leader，all 仍只确认一份。",
+      "证据：02 的 delivery report 证明确认边界，06 的单节点输出证明 RF=1/ISR={1}。",
+      "边界：多故障域同时损坏、非干净选举和未受保护备份仍可能突破 RPO。",
+      "副作用：提高 min ISR 会在副本不足时拒绝写入，牺牲可用性。",
+      "生产验证：联合监控 delivery errors、ISR、UnderReplicatedPartitions 和实际故障演练。"
+    ],
+    "lab": "labs/06-replication-kraft/lab.sh"
+  },
+  {
+    "topic": "producer-reliability",
+    "question": "幂等 Producer 是否能实现业务 exactly-once？",
+    "answer": [
+      "结论：不能，它只抑制特定 Producer 会话内发送重试导致的日志重复。",
+      "机制：Broker 用 Producer ID、epoch 和 partition sequence 识别重复 batch。",
+      "证据：02 实验使用幂等 Producer 并验证唯一 partition/offset 投递结果。",
+      "边界：用户重复请求、多个实例和下游数据库副作用不在保证内。",
+      "副作用：错误的业务假设会让重复扣款等问题被隐藏。",
+      "生产验证：使用稳定 event_id、唯一约束和业务对账，并故障注入重试窗口。"
+    ],
+    "lab": "labs/02-producer-reliability/answers.md"
+  },
+  {
+    "topic": "consumer-groups",
+    "question": "Kafka Consumer lag 应如何计算和解释？",
+    "answer": [
+      "结论：逐分区 lag 是 log-end-offset 减 committed-offset，总 lag 只是聚合。",
+      "机制：Broker 日志末端与 Group 恢复位点之间是尚未提交的距离。",
+      "证据：03 实验先得到总 lag=7，再消费完得到 lag=0。",
+      "边界：lag 不代表业务成功，也不直接等价于延迟秒数。",
+      "副作用：只追求低 lag 可能通过过早提交掩盖业务失败。",
+      "生产验证：结合最老消息年龄、生产/消费率、处理成功、DLQ 和分区热点。"
+    ],
+    "lab": "labs/03-consumer-groups/lab.py"
+  },
+  {
+    "topic": "consumer-groups",
+    "question": "为什么频繁 rebalance 会导致积压恶化？",
+    "answer": [
+      "结论：成员不稳定会暂停或迁移分区，降低有效处理时间并放大重复。",
+      "机制：加入、退出、心跳/poll 超时触发 assignment 变化和在途任务处理。",
+      "证据：03 再均衡实验保存两个成员的 assignment history。",
+      "边界：协作式协议可降低迁移范围，但不能消除应用超时和关闭问题。",
+      "副作用：只调大超时会延长真实故障发现。",
+      "生产验证：对齐处理 P99、poll interval、成员事件、部署时间线和 lag 斜率。"
+    ],
+    "lab": "labs/03-consumer-groups/rebalance.py"
+  },
+  {
+    "topic": "delivery-semantics",
+    "question": "至少一次消费为什么会重复，应该如何处理？",
+    "answer": [
+      "结论：业务完成后、offset 提交前崩溃会重做同一记录。",
+      "机制：恢复点是 committed offset，而外部副作用已发生。",
+      "证据：04 实验 abort 后 seek 回输入位置重试，展示位点与输出的时间线。",
+      "边界：Kafka 事务只能原子化 Kafka 内输出和位点。",
+      "副作用：没有业务幂等会产生重复扣款、通知或库存变更。",
+      "生产验证：稳定 event_id、唯一约束、冲突审计，并在提交窗口做崩溃注入。"
+    ],
+    "lab": "labs/04-delivery-semantics/lab.py"
+  },
+  {
+    "topic": "delivery-semantics",
+    "question": "Kafka 事务的 exactly-once 边界是什么？",
+    "answer": [
+      "结论：它可让 Kafka 多分区输出与消费位点原子可见，不覆盖普通外部系统。",
+      "机制：事务状态、控制记录和 read_committed 共同隐藏 aborted 输出。",
+      "证据：04 实验中 read_uncommitted=5、read_committed=4、输入 committed offset=4。",
+      "边界：数据库、HTTP、邮件等副作用需要额外一致性设计。",
+      "副作用：长事务、transactional.id 冲突和 fencing 会影响吞吐与可用性。",
+      "生产验证：监控事务错误/时长，用 outbox 或 inbox 幂等完成跨系统对账。"
+    ],
+    "lab": "labs/04-delivery-semantics/README.md"
+  },
+  {
+    "topic": "log-storage",
+    "question": "Kafka retention 是否是精确的消息 TTL？",
+    "answer": [
+      "结论：不是，它是异步、segment 粒度的保留策略。",
+      "机制：active segment 先滚动，closed segment 满足时间/大小条件后由后台删除。",
+      "证据：05 实验用 1 MiB segment 和确定性数据写出多个日志段并列出文件大小。",
+      "边界：清理周期、segment 大小和 active 段都会增加实际保留时间。",
+      "副作用：极小 segment 增加文件、索引、句柄和恢复成本。",
+      "生产验证：监控 log-dir 实际字节、最老 segment 时间和磁盘水位。"
+    ],
+    "lab": "labs/05-log-storage/lab.py"
+  },
+  {
+    "topic": "log-storage",
+    "question": "log compaction 和 tombstone 如何工作？",
+    "answer": [
+      "结论：compaction 最终保留稳定 key 的最新状态，空 value tombstone 表示删除。",
+      "机制：cleaner 对 closed segment 合并旧版本，并在保留窗口后清理 tombstone。",
+      "证据：05 实验从四条物理记录重建出只含 user-1 最新版本的逻辑状态。",
+      "边界：旧版本不会立即消失，空 key 也无法按实体压缩。",
+      "副作用：tombstone 窗口过短会让长期离线消费者错过删除。",
+      "生产验证：检查 key 非空率、cleaner lag、段文件和完整重放结果。"
+    ],
+    "lab": "labs/05-log-storage/README.md"
+  },
+  {
+    "topic": "replication-kraft",
+    "question": "ISR 缩小意味着什么，应该立即重启 Broker 吗？",
+    "answer": [
+      "结论：ISR 缩小表示副本未满足同步条件，应先定位磁盘、网络或负载，不能机械重启。",
+      "机制：Follower 落后会离开 ISR，影响 min ISR 写入门槛和故障冗余。",
+      "证据：06 三节点实验停止 Leader 后 ISR 从 3 变 2，重启追齐后恢复 3。",
+      "边界：短时维护与持续复制瓶颈的处置不同。",
+      "副作用：连续重启可能触发更多 Leader 切换和副本追赶。",
+      "生产验证：关联 replica lag、磁盘延迟、网络、Leader 分布和 ISR 变化时间线。"
+    ],
+    "lab": "labs/06-replication-kraft/failover.sh"
+  },
+  {
+    "topic": "replication-kraft",
+    "question": "KRaft Controller quorum 与数据副本是什么关系？",
+    "answer": [
+      "结论：前者管理集群元数据，后者保存各 Topic partition 的业务日志。",
+      "机制：Controller quorum 选元数据 Leader，每个数据 partition 另选读写 Leader。",
+      "证据：06 单节点实验同时输出 metadata quorum 状态和 Topic Leader/ISR。",
+      "边界：Controller 切换不等于全部数据 Leader 切换。",
+      "副作用：只监控一种 Leader 会漏掉另一条故障路径。",
+      "生产验证：分别监控 quorum voter/epoch 和 Offline/UnderReplicated partitions。"
+    ],
+    "lab": "labs/06-replication-kraft/lab.sh"
+  },
+  {
+    "topic": "production-ops",
+    "question": "Kafka 容量应如何估算？",
+    "answer": [
+      "结论：以压缩后峰值字节率、保留和 RF 为基线，再按故障与运维场景加余量。",
+      "机制：每个副本占存储，索引、compaction、事务、重分配和追赶还会额外占用。",
+      "证据：07 实验用 kafka-log-dirs 读取每个 partition 的实际字节。",
+      "边界：集群平均容量不能代表最热 Broker/partition。",
+      "副作用：过低水位会使一次副本迁移就耗尽磁盘。",
+      "生产验证：用真实压缩率和峰值压测，模拟失去一台后的容量与恢复时间。"
+    ],
+    "lab": "labs/07-production-ops/lab.py"
+  },
+  {
+    "topic": "production-ops",
+    "question": "复制为什么不能替代 Kafka 备份与恢复演练？",
+    "answer": [
+      "结论：复制解决在线冗余，误删、坏数据和部分攻击也会同步传播。",
+      "机制：完整恢复还涉及消息、Topic 配置、ACL、Schema 和 Group 位点等多类状态。",
+      "证据：07 恢复实验只重放 payload，并明确展示它未覆盖的状态。",
+      "边界：不同数据流的 RPO/RTO 和可重算性不同。",
+      "副作用：未经验证的备份可能在事故时无法启动业务。",
+      "生产验证：定期恢复到隔离环境，校验记录、event_id、权限、配置与实际 RTO/RPO。"
+    ],
+    "lab": "runbooks/recovery.md"
+  },
+  {
+    "topic": "incident-capstone",
+    "question": "业务记录少于 Kafka 发送成功数，如何证明是否丢数？",
+    "answer": [
+      "结论：先统一 Kafka record、唯一业务事件和业务成功口径，不能用两个总数直接相减。",
+      "机制：上游重试、自动提交、过滤、DLQ 和下游事务都能造成数量差异。",
+      "证据：08 实验 20 条 records、18 个 event_id、lag=0，根因是上游重复。",
+      "边界：Broker 丢失仍需结合 ISR、选举、保留和 partition offset 证据排除。",
+      "副作用：无依据 reset offset 会制造重复副作用并破坏现场。",
+      "生产验证：按 event_id 关联 delivery、partition/offset、Group、处理日志、DLQ 和业务库。"
+    ],
+    "lab": "labs/08-incident-capstone/lab.py"
+  },
+  {
+    "topic": "incident-capstone",
+    "question": "Consumer lag 激增时是否应该立即扩容消费者？",
+    "answer": [
+      "结论：只有存在可用 partition 且瓶颈在 Consumer 计算时，扩容才可能有效。",
+      "机制：同组并行度受 partition 限制，下游饱和或 rebalance 会让更多实例反而恶化。",
+      "证据：事故案例给出 12 个 partition、24 个实例和下游风控超时。",
+      "边界：热点单 partition 不能通过增加同组实例拆分。",
+      "副作用：盲目扩容增加协调、连接和数据库压力。",
+      "生产验证：先看逐分区 lag、assignment、消费/生产率和下游余量，再小步灰度。"
+    ],
+    "lab": "cases/production-incident/README.md"
+  }
+]

@@ -1,0 +1,46 @@
+services:
+  primary:
+    image: redis:8.8.0-alpine
+    command: ["redis-server", "--protected-mode", "no", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 1s
+      timeout: 1s
+      retries: 20
+
+  replica:
+    image: redis:8.8.0-alpine
+    command:
+      - redis-server
+      - --protected-mode
+      - "no"
+      - --replicaof
+      - primary
+      - "6379"
+      - --appendonly
+      - "yes"
+    depends_on:
+      primary:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 1s
+      timeout: 1s
+      retries: 20
+
+  sentinel:
+    image: redis:8.8.0-alpine
+    command:
+      - sh
+      - -c
+      - cp /etc/redis/sentinel.conf /tmp/sentinel.conf && exec redis-sentinel /tmp/sentinel.conf
+    volumes:
+      - ./sentinel.conf:/etc/redis/sentinel.conf:ro
+    depends_on:
+      replica:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "26379", "ping"]
+      interval: 1s
+      timeout: 1s
+      retries: 20

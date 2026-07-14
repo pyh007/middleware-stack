@@ -1,0 +1,30 @@
+x-cluster-node: &cluster-node
+  image: redis:8.8.0-alpine
+  command:
+    - redis-server
+    - --protected-mode
+    - "no"
+    - --cluster-enabled
+    - "yes"
+    - --cluster-config-file
+    - /data/nodes.conf
+    - --cluster-node-timeout
+    - "3000"
+    - --appendonly
+    - "yes"
+  tmpfs:
+    - /data
+  healthcheck:
+    test: ["CMD", "redis-cli", "ping"]
+    interval: 1s
+    timeout: 1s
+    retries: 20
+
+services:
+  cluster-1:
+    <<: *cluster-node
+  cluster-2:
+    <<: *cluster-node
+  cluster-3:
+    <<: *cluster-node
+

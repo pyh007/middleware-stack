@@ -29,17 +29,19 @@
 | 中间件 | 当前内容 | 学习入口 |
 |---|---|---|
 | MySQL | 八周完整课程：设计、调优、并发、InnoDB、恢复、复制、生产运维 | [mysql/study/README.md](mysql/study/README.md) |
-| Redis | Docker 环境、Python 示例 | `redis/` |
-| Kafka | Docker 环境、Python 示例、Kubernetes 资源 | `kafka/`、`k8s/kafka/` |
+| Redis | 八模块完整课程：数据建模、生命周期、性能、并发、持久化、高可用、运维、缓存事故 | [redis/study/README.md](redis/study/README.md) |
+| Kafka | 八模块完整课程：分区、生产消费、语义、存储、KRaft、高可用和生产事故 | [kafka/study/README.md](kafka/study/README.md) |
 | Elasticsearch | 本地 Docker 环境 | `Elasticsearch/` |
 
-MySQL 是第一个按完整模型建设的模块。后续中间件沿用相同结构和验收标准，避免每个目录变成互不相干的 Demo。
+MySQL、Redis 和 Kafka 均使用同一学习闭环与验收标准，但课程主题、实验和生产边界按各自领域设计。
 
 ## 推荐起点
 
 ```bash
 make -C mysql help
 make -C mysql quickstart
+make -C redis help
+make -C redis all
 ```
 
 完整 MySQL 学习路线、复习方法和实验命令见 [MySQL 可重复学习实验室](mysql/study/README.md)。

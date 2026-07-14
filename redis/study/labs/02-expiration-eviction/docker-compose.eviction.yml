@@ -1,0 +1,24 @@
+services:
+  eviction:
+    image: redis:8.8.0-alpine
+    command:
+      - redis-server
+      - --protected-mode
+      - "no"
+      - --maxmemory
+      - 8mb
+      - --maxmemory-policy
+      - allkeys-lru
+      - --save
+      - ""
+      - --appendonly
+      - "no"
+    ports:
+      - "127.0.0.1:6389:6379"
+    tmpfs:
+      - /data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 1s
+      timeout: 1s
+      retries: 20

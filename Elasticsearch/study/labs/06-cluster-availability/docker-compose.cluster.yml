@@ -1,0 +1,58 @@
+x-es-common: &es-common
+  image: docker.elastic.co/elasticsearch/elasticsearch:${ES_VERSION:-9.4.3-arm64}
+  environment: &es-environment
+    cluster.name: es-study-cluster
+    discovery.seed_hosts: es01,es02,es03
+    cluster.initial_master_nodes: es-study-1,es-study-2,es-study-3
+    xpack.security.enabled: "false"
+    xpack.license.self_generated.type: basic
+    cluster.routing.allocation.disk.watermark.low: 1536mb
+    cluster.routing.allocation.disk.watermark.high: 1gb
+    cluster.routing.allocation.disk.watermark.flood_stage: 512mb
+    indices.merge.disk.watermark.high: 512mb
+    ES_JAVA_OPTS: -Xms384m -Xmx384m
+    _JAVA_OPTIONS: -XX:UseSVE=0
+  ulimits:
+    memlock:
+      soft: -1
+      hard: -1
+  healthcheck:
+    test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:9200/_cluster/health >/dev/null"]
+    interval: 5s
+    timeout: 5s
+    retries: 60
+
+services:
+  es01:
+    <<: *es-common
+    container_name: es-study-cluster-1
+    environment:
+      <<: *es-environment
+      node.name: es-study-1
+    ports:
+      - "127.0.0.1:19200:9200"
+    volumes:
+      - es01-data:/usr/share/elasticsearch/data
+
+  es02:
+    <<: *es-common
+    container_name: es-study-cluster-2
+    environment:
+      <<: *es-environment
+      node.name: es-study-2
+    volumes:
+      - es02-data:/usr/share/elasticsearch/data
+
+  es03:
+    <<: *es-common
+    container_name: es-study-cluster-3
+    environment:
+      <<: *es-environment
+      node.name: es-study-3
+    volumes:
+      - es03-data:/usr/share/elasticsearch/data
+
+volumes:
+  es01-data:
+  es02-data:
+  es03-data:

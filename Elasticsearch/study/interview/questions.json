@@ -1,0 +1,178 @@
+[
+  {
+    "topic": "01-映射分析",
+    "question": "text 与 keyword 如何选择，选错后为什么不能靠改 mapping 原地修复？",
+    "answer": [
+      "结论：全文相关性字段用 text，精确过滤、聚合和排序字段用 keyword；常见业务可用 multi-field 同时保留两种视图。",
+      "机制：text 经 analyzer 产生 token 写入倒排索引，keyword 保留整体 term；已写入 Lucene segment 的字段表示不能被新 mapping 原地重写。",
+      "证据：实验观察 _analyze token、mapping 和 match/term 行为；修复通常新建索引、reindex、校验并切别名。",
+      "边界与验证：评估磁盘峰值、写入双写/追平和回滚别名，生产抽样校验命中与聚合。"
+    ],
+    "lab": "labs/01-documents-mappings/README.md"
+  },
+  {
+    "topic": "01-映射分析",
+    "question": "如何控制 mapping explosion，而不牺牲所有扩展属性？",
+    "answer": [
+      "结论：优先预定义 schema、dynamic template 或 strict；真正无界键值考虑 flattened，并设置字段数上限和告警。",
+      "机制：每个动态字段扩展 mapping 与 cluster state，并增加每段 field metadata 和查询堆成本。",
+      "证据：事故实验用很低的 total_fields.limit 得到 400，并观察写入被阻止。",
+      "副作用与验证：flattened 限制字段级类型与部分查询能力；灰度验证关键过滤、聚合、堆和 cluster state 大小。"
+    ],
+    "lab": "labs/08-incident-capstone/README.md"
+  },
+  {
+    "topic": "02-分片路由",
+    "question": "自定义 routing 带来什么收益和风险？",
+    "answer": [
+      "结论：稳定路由键能把单租户查询缩小到少数分片，但低基数或大租户会制造热点。",
+      "机制：routing 参与哈希决定目标主分片；读取时提供同一 routing 才能缩小 fan-out。",
+      "证据：实验中搜索分片组从 2 降到 1，综合实验显示主分片文档明显偏斜。",
+      "生产验证：按租户统计写入、搜索、docs、store 与 P99，准备大租户拆分和 reindex 迁移方案。"
+    ],
+    "lab": "labs/02-index-shards/README.md"
+  },
+  {
+    "topic": "02-分片路由",
+    "question": "为什么用别名切换索引，切换前后必须校验什么？",
+    "answer": [
+      "结论：别名 API 可原子删除旧指向并添加新指向，使读写切换不暴露中间态。",
+      "机制：is_write_index 明确多索引别名的写目标；mapping 或主分片数变更通常通过新索引完成。",
+      "证据：实验切换后新文档只进入 V2，别名状态只指向 V2。",
+      "边界：切换不自动追平增量；需校验文档数、时间水位、checksum、权限和客户端缓存，保留回切旧别名。"
+    ],
+    "lab": "labs/02-index-shards/README.md"
+  },
+  {
+    "topic": "03-搜索性能",
+    "question": "query 与 filter context 有何区别，怎样证明慢在哪里？",
+    "answer": [
+      "结论：相关性条件放 query，布尔约束放 filter；性能结论必须由慢日志和受控 profile 证明。",
+      "机制：query 计算 score，filter 只判断匹配并更适合缓存；协调节点还承担 fetch 和 reduce。",
+      "证据：实验输出命中分数、聚合和 profile 查询节点类型。",
+      "边界：profile 自身增加开销，不应全量开启；同时看分片 fan-out、返回字段和聚合桶。"
+    ],
+    "lab": "labs/03-search-profile/README.md"
+  },
+  {
+    "topic": "03-搜索性能",
+    "question": "深分页为什么昂贵，search_after 的边界是什么？",
+    "answer": [
+      "结论：大 from/size 要每个分片保留并传回更大的候选集；稳定遍历使用唯一排序键配合 search_after，跨刷新一致性再加 PIT。",
+      "机制：search_after 从上一页 sort 值继续，不随机跳页；PIT 固定段视图但占用资源。",
+      "证据：实验用 price+doc_id 游标得到无重复的两页。",
+      "生产验证：验证排序唯一性、PIT 过期、刷新并发、延迟和资源占用。"
+    ],
+    "lab": "labs/03-search-profile/README.md"
+  },
+  {
+    "topic": "04-写入一致性",
+    "question": "写入返回成功后，为什么搜索可能看不到但 GET 能看到？",
+    "answer": [
+      "结论：写入确认与搜索可见由 refresh 分隔，实时 GET 可从引擎/translog 路径读取新版本。",
+      "机制：refresh 把 indexing buffer 的内容变成可搜索 segment；flush 是 Lucene commit 与 translog 周期，不等同 refresh。",
+      "证据：实验在 refresh_interval=-1 时实时 GET 成功、count 为 0，手动 refresh 后 count 为 1。",
+      "副作用：更频繁 refresh 降低可见延迟但制造小段和 merge 压力；按业务新鲜度验证。"
+    ],
+    "lab": "labs/04-write-consistency/README.md"
+  },
+  {
+    "topic": "04-写入一致性",
+    "question": "如何防止两个客户端静默覆盖同一文档？",
+    "answer": [
+      "结论：读出 _seq_no 和 _primary_term，更新时带 if_seq_no/if_primary_term；冲突后按业务合并或重试。",
+      "机制：主分片为操作分配序号，主分片任期变化能阻止旧主或陈旧读写入。",
+      "证据：实验第一次更新成功，复用旧条件得到 409 version conflict。",
+      "边界：盲目重试仍可能覆盖语义冲突；生产记录冲突率并做幂等、版本或人工处理。"
+    ],
+    "lab": "labs/04-write-consistency/README.md"
+  },
+  {
+    "topic": "05-段与资源",
+    "question": "segment merge 为什么会同时影响磁盘、CPU 和搜索？",
+    "answer": [
+      "结论：不可变小段需后台合并成大段并清除删除墓碑，过程读旧段、写新段，消耗 I/O、CPU 和临时磁盘。",
+      "机制：refresh 产生新段；合并完成前旧段仍占空间，缓存还可能因段变化失效。",
+      "证据：安全实验观察多个段和 cache hit，显式 force-merge 实验只读后把段降到 1。",
+      "边界：活跃索引不随意 force merge；监控 merge throttle、磁盘余量、P99 和恢复速度。"
+    ],
+    "lab": "labs/05-segments-resources/README.md"
+  },
+  {
+    "topic": "05-段与资源",
+    "question": "出现 rejected 时为什么不应只扩大线程池队列？",
+    "answer": [
+      "结论：rejected 是背压证据，先找服务时间和到达率为何超过处理能力；大队列通常只是增加延迟与堆占用。",
+      "机制：慢查询、merge/GC、热点分片和客户端重试会让有限 worker/queue 饱和。",
+      "证据：实验采集 search/write active、queue、rejected，并与 heap、GC、磁盘一起解释。",
+      "生产验证：入口限流、消除无界重试、优化请求或扩容后，确认吞吐、P99、rejected 和资源同时恢复。"
+    ],
+    "lab": "runbooks/diagnosis.md"
+  },
+  {
+    "topic": "06-高可用",
+    "question": "green、yellow、red 分别意味着什么，yellow 一定要立即降副本吗？",
+    "answer": [
+      "结论：green 主副本均已分配；yellow 主分片可用但至少一个副本未分配；red 至少一个主分片未分配。",
+      "机制：同一分片的副本不能与主分片放在同节点，单节点配一个副本必然 yellow。",
+      "证据：实验 allocation explain 给出未分配原因，搜索仍成功；副本设 0 后仅实验索引变 green。",
+      "边界：生产降副本会降低容错，必须先修复节点、磁盘、过滤或故障域原因。"
+    ],
+    "lab": "labs/06-cluster-availability/README.md"
+  },
+  {
+    "topic": "06-高可用",
+    "question": "主分片节点故障时怎样证明没有只看 health 误判？",
+    "answer": [
+      "结论：同时证明副本提升、业务文档可读、客户端错误窗口和节点恢复后的再分配。",
+      "机制：有 in-sync 副本时 master 选择新主；副本不足期间可能 yellow，但读写可继续。",
+      "证据：显式三节点实验记录旧主、新主、停机后文档读取和恢复后分片状态。",
+      "边界：未同步副本、网络分区、master 不可用和写确认配置会改变结果，生产用故障演练量化 RTO。"
+    ],
+    "lab": "labs/06-cluster-availability/README.md"
+  },
+  {
+    "topic": "07-恢复安全",
+    "question": "为什么副本不能替代快照，快照成功又为什么不足？",
+    "answer": [
+      "结论：副本会同步误删和坏写，不能提供历史恢复点；快照成功只证明仓库写入，必须恢复并做业务校验。",
+      "机制：快照复用不可变段并记录集群/索引元数据，恢复受版本、仓库、带宽和分片资源约束。",
+      "证据：显式实验删除隔离索引、恢复后校验固定 checksum。",
+      "生产验证：记录实际 RPO/RTO、失败分片、文档数、时间水位、checksum、别名、权限和应用读写。"
+    ],
+    "lab": "runbooks/recovery.md"
+  },
+  {
+    "topic": "07-恢复安全",
+    "question": "Elasticsearch 应用账号的最小权限和轮换如何落地？",
+    "answer": [
+      "结论：按应用、环境、索引模式和读写动作拆账号/API key，设置 owner、过期、轮换、吊销和审计。",
+      "机制：角色把 cluster 与 indices privileges 分开；网络 TLS 和认证共同保护凭据与数据。",
+      "证据：实验创建临时只读角色，search 成功、写入返回 403，随后删除账号和角色。",
+      "边界：不要用超级用户或本地明文密码；轮换需双 key 灰度并验证旧 key 已吊销。"
+    ],
+    "lab": "labs/07-snapshot-operations/README.md"
+  },
+  {
+    "topic": "08-事故综合",
+    "question": "映射爆炸、热点分片、GC 和 rejected 如何形成因果链？",
+    "answer": [
+      "结论：它们可能相互放大，但必须用共同时间线和对照组证明，不能仅凭同时出现认定根因。",
+      "机制：字段膨胀占堆，热点集中工作，频繁 refresh/merge 抢 I/O，GC 拉长服务时间，队列饱和后 rejected，重试再放大流量。",
+      "证据：综合实验给出字段上限错误、主分片 docs 偏斜和线程池基线；案例要求补齐生产指标。",
+      "止损与验证：控流、停动态字段、回滚 refresh 变更，再看 P99、rejected、GC、偏斜和数据新鲜度是否同步恢复。"
+    ],
+    "lab": "cases/production-incident/README.md"
+  },
+  {
+    "topic": "08-事故综合",
+    "question": "面对磁盘水位与未分配分片，为什么不能直接关闭水位或删除数据？",
+    "answer": [
+      "结论：水位是防止磁盘耗尽和数据损坏的保护；先确认增长来源、可删除范围、快照和恢复路径，再扩容或按审批清理。",
+      "机制：分配 decider 会因磁盘阈值限制新分片，关闭阈值会把风险推迟到更严重的全盘故障。",
+      "证据：诊断 Runbook 要求保存 allocation explain、分片 store、磁盘趋势和最近变更。",
+      "生产验证：修复后确认磁盘余量、分配恢复速率、节点负载、业务 SLO 和快照恢复校验，保留回滚。"
+    ],
+    "lab": "runbooks/security-capacity.md"
+  }
+]
